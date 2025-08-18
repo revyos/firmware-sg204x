@@ -38,6 +38,10 @@ jobs:
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2044-upstream-v6.15.y
             LINUX_REPO: revyos/sg2044-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: pisces
+            LINUX_BRANCH: wip/sg2042-upstream-v6.12.y-pisces
+            LINUX_REPO: revyos/sg2042-vendor-kernel
 
     env:
       MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.03.01
@@ -66,6 +70,13 @@ jobs:
           repository: riscv-software-src/opensbi
           path: opensbi
           ref: v1.7
+
+      - name: Pisces Support
+        if: matrix.M_CHIP_NUM == 'pisces' && matrix.CHIP == 'sg2042'
+        run: |
+          echo "Enabling Pisces support for ${{matrix.CHIP}}"
+          sed -i 's/16/32/g' opensbi/platform/generic/sophgo/sg2042.c
+          cat opensbi/platform/generic/sophgo/sg2042.c
 
       - name: Checkout Linux Kernel
         uses: actions/checkout@v4
@@ -123,13 +134,16 @@ jobs:
           export CHIP=${{ matrix.CHIP }}
           export CROSS_COMPILE=riscv64-unknown-linux-gnu- # This is the common prefix for the downloaded toolchain
           ./build.sh all # Calls the 'all' target in your build.sh script
-          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}.bin
-          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}.img
+          BRANCH=$(echo "${{ matrix.LINUX_BRANCH }}" | sed 's/\//_/g')
+
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}.bin
+          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}.img
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}
+          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ env.BRANCH }}
           path: |
             firmware_*.bin
             firmware_*.img
