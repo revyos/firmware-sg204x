@@ -77,6 +77,9 @@ jobs:
           echo "Enabling Pisces support for ${{matrix.CHIP}}"
           sed -i 's/16/32/g' opensbi/platform/generic/sophgo/sg2042.c
           cat opensbi/platform/generic/sophgo/sg2042.c
+          sed -i 's#get_ddr_size(sg2042_ddr_reg_size, i)#get_ddr_size(sg2042_ddr_reg_size, i) / 2#g' zsbl/plat/sg2042/plat.c
+          sed -i 's#cfg->ddr\[chip_num\]\[i].size;#cfg->ddr\[chip_num\]\[i].size \* 2;#g' zsbl/plat/sg2042/plat.c
+          cat zsbl/plat/sg2042/plat.c
 
       - name: Checkout Linux Kernel
         uses: actions/checkout@v4
