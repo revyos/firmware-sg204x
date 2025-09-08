@@ -16,6 +16,10 @@ jobs:
         include:
           - CHIP: sg2042
             M_CHIP_NUM: single
+            LINUX_BRANCH: sg2042-upstream-v6.17.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.16.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
           - CHIP: sg2042
@@ -30,6 +34,10 @@ jobs:
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.6.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2044-upstream-v6.17.y
+            LINUX_REPO: revyos/sg2044-vendor-kernel
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2044-upstream-v6.16.y
