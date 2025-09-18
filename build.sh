@@ -138,7 +138,11 @@ kernel_build() {
     echo "  Copying Kernel Image to ${OUT}/riscv64_Image..."
     cp -vf "${KERNEL_DIR}/arch/riscv/boot/Image" "${OUT}/riscv64_Image" || { echo "Error: Failed to copy Kernel Image."; exit 1; }
     echo "  Copying DTB files to ${OUT}/..."
-    cp -vf "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/${CHIP}"-*.dtb "${OUT}/" || { echo "Error: Failed to copy DTB files."; exit 1; }
+    if find "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/" -maxdepth 1 -name "mango-*.dtb" -print -quit | grep -q .; then
+        cp -vf "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/mango"-*.dtb "${OUT}/" || { echo "Error: Failed to copy mango DTB files."; exit 1; }
+    else
+        cp -vf "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/${CHIP}"-*.dtb "${OUT}/" || { echo "Error: Failed to copy ${CHIP} DTB files."; exit 1; }
+    fi
     echo "--- Kernel build complete ---"
 }
 
