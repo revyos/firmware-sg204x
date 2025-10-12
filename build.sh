@@ -152,7 +152,7 @@ uroot_build() {
     echo "--- Building u-root initrd ---"
     mkdir -p "${OUT}" || { echo "Error: Failed to create output directory ${OUT}."; exit 1; }
     echo "  Building u-root in ${UROOT_DIR}..."
-    (cd "${UROOT_DIR}" && GOARCH=riscv64 go build) || { echo "Error: u-root go build failed."; exit 1; }
+    (cd "${UROOT_DIR}" && go build) || { echo "Error: u-root go build failed."; exit 1; }
     echo "  Creating initrd.img..."
     GOOS=linux GOARCH=riscv64 "${UROOT_DIR}/u-root" -uroot-source "${UROOT_DIR}" -build bb \
         -uinitcmd="boot" -o "${OUT}/initrd.img" \
