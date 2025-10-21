@@ -1,0 +1,167 @@
+name: sg204x-bootloader
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: # Allows manual triggering of the workflow
+  schedule:
+    - cron: "0 2 * * *" # Runs daily at 2 AM UTC
+
+jobs:
+  build-bootloader:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false # Allows other matrix jobs to complete even if one fails
+      matrix:
+        include:
+          - CHIP: sg2042
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2042-upstream-v6.18.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2042-upstream-v6.17.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2042-upstream-v6.16.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2042-upstream-v6.12.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2042-upstream-v6.6.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2042
+            M_CHIP_NUM: pisces
+            LINUX_BRANCH: sg2042-vendor-v6.6.y
+            LINUX_REPO: revyos/sg2042-vendor-kernel
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2044-upstream-v6.18.y
+            LINUX_REPO: revyos/sg2044-vendor-kernel
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2044-upstream-v6.17.y
+            LINUX_REPO: revyos/sg2044-vendor-kernel
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2044-upstream-v6.16.y
+            LINUX_REPO: revyos/sg2044-vendor-kernel
+
+    env:
+      MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.10.18
+      MAINLINE_TOOLCHAIN_FILENAME: riscv64-glibc-ubuntu-24.04-gcc.tar.xz
+      TOOLCHAIN_HOME: /opt/riscv # Directory where the toolchain will be extracted
+      ARCH: riscv
+      KBUILD_BUILD_USER: riscv
+      KBUILD_BUILD_HOST: riscv-builder
+      KDEB_COMPRESS: xz
+      # CHIP and M_CHIP_NUM are already available via matrix.CHIP and matrix.M_CHIP_NUM,
+      # no need to redefine them here in the global env block.
+
+    steps:
+      - name: Checkout Main Repository
+        uses: actions/checkout@v5
+
+      - name: Checkout ZSBL
+        uses: actions/checkout@v5
+        with:
+          repository: revyos/zsbl
+          path: zsbl
+
+      - name: Checkout OpenSBI
+        if: ${{ matrix.M_CHIP_NUM != 'pisces' }}
+        uses: actions/checkout@v5
+        with:
+          repository: revyos/opensbi
+          path: opensbi
+          ref: sg204x-v1.7
+
+      - name: Checkout OpenSBI SG2042 PISCES
+        if: ${{ matrix.M_CHIP_NUM == 'pisces' && matrix.CHIP == 'sg2042' }}
+        uses: actions/checkout@v5
+        with:
+          repository: revyos/opensbi
+          path: opensbi
+          ref: sg2042-v1.2
+
+      - name: Checkout Linux Kernel
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ matrix.LINUX_REPO }}
+          path: kernel_${{ matrix.CHIP }}
+          ref: ${{ matrix.LINUX_BRANCH }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.13' # As per the build.sh script's requirement (< 1.22)
+          cache: true # Cache Go modules for faster u-root builds
+
+      - name: Show Go Version
+        run: go version
+
+      - name: Cache RISC-V Toolchain
+        id: cache-toolchain # Assign an ID to this step to check its output later
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TOOLCHAIN_HOME }}
+          key: ${{ runner.os }}-riscv-toolchain-${{ env.MAINLINE_TOOLCHAIN_FILENAME }}-${{ hashFiles(env.MAINLINE_TOOLCHAIN_FILENAME) }}
+          restore-keys: |
+            ${{ runner.os }}-riscv-toolchain-${{ env.MAINLINE_TOOLCHAIN_FILENAME }}
+
+      - name: Install System Dependencies and Toolchain
+        run: |
+          sudo apt update
+          sudo apt install -y gdisk dosfstools g++-riscv64-linux-gnu build-essential \
+                             libncurses-dev gawk flex bison openssl libssl-dev tree \
+                             dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf \
+                             device-tree-compiler xz-utils qemu-system-riscv64 binfmt-support qemu-user-static \
+                             curl automake autotools-dev python3 libmpc-dev libmpfr-dev \
+                             libgmp-dev texinfo gperf libtool patchutils bc zlib1g-dev \
+                             libexpat-dev ninja-build uuid-dev gcc-riscv64-unknown-elf
+
+          update-binfmts --display
+
+          # Download and extract toolchain only if not found in cache
+          if [ "${{ steps.cache-toolchain.outputs.cache-hit }}" != "true" ]; then
+            echo "Toolchain not found in cache. Downloading and extracting..."
+            # Using curl instead of wget, as it's generally more robust for downloads
+            curl -L "${MAINLINE_TOOLCHAIN_URL}/${MAINLINE_TOOLCHAIN_FILENAME}" -o "${MAINLINE_TOOLCHAIN_FILENAME}"
+            sudo tar -xvf "${MAINLINE_TOOLCHAIN_FILENAME}" -C /opt
+          else
+            echo "Toolchain found in cache. Skipping download and extraction."
+          fi
+
+      - name: Build Firmware
+        # Set CHIP and CROSS_COMPILE as environment variables for the build.sh script.
+        # The CROSS_COMPILE prefix must match the toolchain installed.
+        run: |
+          export PATH=${TOOLCHAIN_HOME}/bin:$PATH
+          export CHIP=${{ matrix.CHIP }}
+          export CROSS_COMPILE=riscv64-unknown-linux-gnu- # This is the common prefix for the downloaded toolchain
+          ./build.sh all # Calls the 'all' target in your build.sh script
+          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}.bin
+          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}.img
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}
+          path: |
+            firmware_*.bin
+            firmware_*.img
+          retention-days: 30 # How long to keep the artifacts
+
+      - name: Upload Firmware to Release (on Tag Push)
+        # This step runs only if the workflow was triggered by a tag push
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            firmware_*.bin
+            firmware_*.img
+          prerelease: true
