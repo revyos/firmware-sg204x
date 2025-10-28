@@ -68,6 +68,12 @@ jobs:
             LINUX_REPO: revyos/sg2044-vendor-kernel
             OPENSBI_BRANCH: sg204x-v1.7
             OPENSBI_REPO: revyos/opensbi
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: sg2044-upstream-v6.17.y
+            LINUX_REPO: revyos/sg2044-vendor-kernel
+            OPENSBI_BRANCH: sg2044-master-rva23
+            OPENSBI_REPO: revyos/opensbi
 
     env:
       MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.10.18
