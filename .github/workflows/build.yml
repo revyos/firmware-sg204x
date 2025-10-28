@@ -18,38 +18,56 @@ jobs:
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.18.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.17.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.16.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.12.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2042-upstream-v6.6.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
             M_CHIP_NUM: pisces
             LINUX_BRANCH: sg2042-vendor-v6.6.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
+            OPENSBI_BRANCH: sg2042-v1.2
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2044-upstream-v6.18.y
             LINUX_REPO: revyos/sg2044-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2044-upstream-v6.17.y
             LINUX_REPO: revyos/sg2044-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: sg2044-upstream-v6.16.y
             LINUX_REPO: revyos/sg2044-vendor-kernel
+            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_REPO: revyos/opensbi
 
     env:
       MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.10.18
@@ -73,20 +91,11 @@ jobs:
           path: zsbl
 
       - name: Checkout OpenSBI
-        if: ${{ matrix.M_CHIP_NUM != 'pisces' }}
         uses: actions/checkout@v5
         with:
-          repository: revyos/opensbi
+          repository: ${{ matrix.OPENSBI_REPO }}
           path: opensbi
-          ref: sg204x-v1.7
-
-      - name: Checkout OpenSBI SG2042 PISCES
-        if: ${{ matrix.M_CHIP_NUM == 'pisces' && matrix.CHIP == 'sg2042' }}
-        uses: actions/checkout@v5
-        with:
-          repository: revyos/opensbi
-          path: opensbi
-          ref: sg2042-v1.2
+          ref: ${{ matrix.OPENSBI_BRANCH }}
 
       - name: Checkout Linux Kernel
         uses: actions/checkout@v5
@@ -144,13 +153,13 @@ jobs:
           export CHIP=${{ matrix.CHIP }}
           export CROSS_COMPILE=riscv64-unknown-linux-gnu- # This is the common prefix for the downloaded toolchain
           ./build.sh all # Calls the 'all' target in your build.sh script
-          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}.bin
-          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}.img
+          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}-${{ matrix.OPENSBI_BRANCH }}.bin
+          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}-${{ matrix.OPENSBI_BRANCH }}.img
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}
+          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}-${{ matrix.OPENSBI_BRANCH }}
           path: |
             firmware_*.bin
             firmware_*.img
