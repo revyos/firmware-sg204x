@@ -121,7 +121,7 @@ opensbi_build() {
     echo "  Cleaning OpenSBI in ${OPENSBI_DIR}..."
     (cd "${OPENSBI_DIR}" && make -j"$(nproc)" clean) || { echo "Error: OpenSBI clean failed."; exit 1; }
     echo "  Compiling OpenSBI for platform ${OPENSBI_PLATFORM}..."
-    (cd "${OPENSBI_DIR}" && make -j"$(nproc)" PLATFORM="${OPENSBI_PLATFORM}" FW_PIC=y BUILD_INFO=y DEBUG=1) || { echo "Error: OpenSBI compilation failed."; exit 1; }
+    (cd "${OPENSBI_DIR}" && make -j"$(nproc)" PLATFORM="${OPENSBI_PLATFORM}" FW_PIC=y BUILD_INFO=y) || { echo "Error: OpenSBI compilation failed."; exit 1; }
     echo "  Copying fw_dynamic.bin to ${OUT}/fw_dynamic.bin..."
     cp -vf "${OPENSBI_DIR}/build/platform/${OPENSBI_PLATFORM}/firmware/fw_dynamic.bin" "${OUT}/fw_dynamic.bin" || { echo "Error: Failed to copy fw_dynamic.bin."; exit 1; }
     echo "--- OpenSBI build complete ---"
