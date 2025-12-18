@@ -147,13 +147,15 @@ jobs:
           export CHIP=${{ matrix.CHIP }}
           export CROSS_COMPILE=riscv64-unknown-linux-gnu- # This is the common prefix for the downloaded toolchain
           ./build.sh all # Calls the 'all' target in your build.sh script
-          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}-${{ matrix.OPENSBI_BRANCH }}.bin
-          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}-${{ matrix.OPENSBI_BRANCH }}.img
+          BRANCH=$(echo "${{ matrix.LINUX_BRANCH }}" | sed 's/\//_/g')
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.bin
+          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.img
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ matrix.LINUX_BRANCH }}-${{ matrix.OPENSBI_BRANCH }}
+          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ env.BRANCH }}-${{ matrix.OPENSBI_BRANCH }}
           path: |
             firmware_*.bin
             firmware_*.img
