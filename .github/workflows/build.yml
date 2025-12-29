@@ -47,6 +47,7 @@ jobs:
       KBUILD_BUILD_USER: riscv
       KBUILD_BUILD_HOST: riscv-builder
       KDEB_COMPRESS: xz
+      TZ: Asia/Shanghai
       # CHIP and M_CHIP_NUM are already available via matrix.CHIP and matrix.M_CHIP_NUM,
       # no need to redefine them here in the global env block.
 
