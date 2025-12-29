@@ -40,7 +40,7 @@ jobs:
             OPENSBI_REPO: revyos/opensbi
 
     env:
-      MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.10.18
+      MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.12.29
       MAINLINE_TOOLCHAIN_FILENAME: riscv64-glibc-ubuntu-24.04-gcc.tar.xz
       TOOLCHAIN_HOME: /opt/riscv # Directory where the toolchain will be extracted
       ARCH: riscv
