@@ -18,7 +18,7 @@ jobs:
             M_CHIP_NUM: single
             LINUX_BRANCH: revyos/6.18.y
             LINUX_REPO: revyos/linux
-            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_BRANCH: sg204x-v1.8
             OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
             M_CHIP_NUM: pisces
@@ -30,7 +30,7 @@ jobs:
             M_CHIP_NUM: single
             LINUX_BRANCH: revyos/6.18.y
             LINUX_REPO: revyos/linux
-            OPENSBI_BRANCH: sg204x-v1.7
+            OPENSBI_BRANCH: sg204x-v1.8
             OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2044
             M_CHIP_NUM: single
