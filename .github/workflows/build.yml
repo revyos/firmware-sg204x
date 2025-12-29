@@ -21,24 +21,6 @@ jobs:
             OPENSBI_BRANCH: sg204x-v1.7
             OPENSBI_REPO: revyos/opensbi
           - CHIP: sg2042
-            M_CHIP_NUM: single
-            LINUX_BRANCH: revyos/6.17.y
-            LINUX_REPO: revyos/linux
-            OPENSBI_BRANCH: sg204x-v1.7
-            OPENSBI_REPO: revyos/opensbi
-          - CHIP: sg2042
-            M_CHIP_NUM: single
-            LINUX_BRANCH: sg2042-upstream-v6.12.y
-            LINUX_REPO: revyos/sg2042-vendor-kernel
-            OPENSBI_BRANCH: sg204x-v1.7
-            OPENSBI_REPO: revyos/opensbi
-          - CHIP: sg2042
-            M_CHIP_NUM: single
-            LINUX_BRANCH: sg2042-upstream-v6.6.y
-            LINUX_REPO: revyos/sg2042-vendor-kernel
-            OPENSBI_BRANCH: sg204x-v1.7
-            OPENSBI_REPO: revyos/opensbi
-          - CHIP: sg2042
             M_CHIP_NUM: pisces
             LINUX_BRANCH: sg2042-vendor-v6.6.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
@@ -47,12 +29,6 @@ jobs:
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: revyos/6.18.y
-            LINUX_REPO: revyos/linux
-            OPENSBI_BRANCH: sg204x-v1.7
-            OPENSBI_REPO: revyos/opensbi
-          - CHIP: sg2044
-            M_CHIP_NUM: single
-            LINUX_BRANCH: revyos/6.17.y
             LINUX_REPO: revyos/linux
             OPENSBI_BRANCH: sg204x-v1.7
             OPENSBI_REPO: revyos/opensbi
