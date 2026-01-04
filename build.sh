@@ -13,13 +13,22 @@ set -e
 # --- Configuration Variables ---
 # CHIP variable: Defaults to sg2044. Can be overridden by setting the CHIP environment variable.
 CHIP=${CHIP:-sg2044}
+# FIRMWARE: Defines the boot flow. Supported values: 'linuxboot' (default) or 'edk2'
+FIRMWARE=${FIRMWARE:-linuxboot}
 # Output directory: Defaults to ./out
 OUT=${PWD}/out
+
+# Validate FIRMWARE variable
+if [ "${FIRMWARE}" != "linuxboot" ] && [ "${FIRMWARE}" != "edk2" ]; then
+    echo "Error: FIRMWARE must be set to either 'linuxboot' or 'edk2'. Current: ${FIRMWARE}"
+    exit 1
+fi
 
 # Toolchain and Kernel Settings
 CROSS_COMPILE=${CROSS_COMPILE:-riscv64-linux-gnu-} # Cross-compilation toolchain prefix
 ARCH=${ARCH:-riscv}                                # Architecture
 KERNEL_CONFIG=${KERNEL_CONFIG:-kexec_defconfig}    # Kernel configuration file
+
 
 # Export variables so child processes (like nested 'make' calls) can use them
 export CROSS_COMPILE
@@ -101,14 +110,22 @@ check_go_version() {
 
 # Function to build ZSBL
 zsbl_build() {
-    echo "--- Building ZSBL ---"
+    echo "--- Building ZSBL (Mode: ${FIRMWARE}) ---"
     mkdir -p "${OUT}" || { echo "Error: Failed to create output directory ${OUT}."; exit 1; }
     echo "  Cleaning ZSBL in ${ZSBL_DIR}..."
     (cd "${ZSBL_DIR}" && make -j"$(nproc)" clean) || { echo "Error: ZSBL clean failed."; exit 1; }
     echo "  Configuring ZSBL with ${CHIP}_defconfig..."
     (cd "${ZSBL_DIR}" && make -j"$(nproc)" "${CHIP}_defconfig") || { echo "Error: ZSBL defconfig failed."; exit 1; }
+
+    # Define extra options based on FIRMWARE type
+    local ZSBL_OPTS=""
+    if [ "${FIRMWARE}" = "linuxboot" ]; then
+        ZSBL_OPTS="USE_LINUX_BOOT=1"
+        echo "  Enabling USE_LINUX_BOOT macro for ZSBL..."
+    fi
+
     echo "  Compiling ZSBL (zsbl.bin)..."
-    (cd "${ZSBL_DIR}" && make -j"$(nproc)" zsbl.bin) || { echo "Error: ZSBL compilation failed."; exit 1; }
+    (cd "${ZSBL_DIR}" && make -j"$(nproc)" zsbl.bin ${ZSBL_OPTS}) || { echo "Error: ZSBL compilation failed."; exit 1; }
     echo "  Copying zsbl.bin to ${OUT}/zsbl.bin..."
     cp -vf "${ZSBL_DIR}/zsbl.bin" "${OUT}/zsbl.bin" || { echo "Error: Failed to copy zsbl.bin."; exit 1; }
     echo "--- ZSBL build complete ---"
@@ -133,31 +150,41 @@ kernel_build() {
     mkdir -p "${OUT}" || { echo "Error: Failed to create output directory ${OUT}."; exit 1; }
     echo "  Configuring Kernel with ${KERNEL_CONFIG} in ${KERNEL_DIR}..."
     (cd "${KERNEL_DIR}" && make -j"$(nproc)" "${KERNEL_CONFIG}") || { echo "Error: Kernel defconfig failed."; exit 1; }
-    echo "  Compiling Kernel..."
-    (cd "${KERNEL_DIR}" && make -j"$(nproc)") || { echo "Error: Kernel compilation failed."; exit 1; }
-    echo "  Copying Kernel Image to ${OUT}/riscv64_Image..."
-    cp -vf "${KERNEL_DIR}/arch/riscv/boot/Image" "${OUT}/riscv64_Image" || { echo "Error: Failed to copy Kernel Image."; exit 1; }
+    if [ "${FIRMWARE}" = "linuxboot" ]; then
+        echo "  [LinuxBoot Mode] Compiling full Kernel and DTBs..."
+        (cd "${KERNEL_DIR}" && make -j"$(nproc)") || { echo "Error: Kernel compilation failed."; exit 1; }
+        echo "  Copying Kernel Image to ${OUT}/riscv64_Image..."
+        cp -vf "${KERNEL_DIR}/arch/riscv/boot/Image" "${OUT}/riscv64_Image" || { echo "Error: Failed to copy Kernel Image."; exit 1; }
+    elif [ "${FIRMWARE}" = "edk2" ]; then
+        echo "  [EDK2 Mode] Only compiling Device Tree Blobs (dtbs)..."
+        (cd "${KERNEL_DIR}" && make -j"$(nproc)" dtbs) || { echo "Error: DTB compilation failed."; exit 1; }
+    fi
     echo "  Copying DTB files to ${OUT}/..."
+    # Keep the original logic for mango or chip-specific DTBs
     if find "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/" -maxdepth 1 -name "mango-*.dtb" -print -quit | grep -q .; then
         cp -vf "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/mango"-*.dtb "${OUT}/" || { echo "Error: Failed to copy mango DTB files."; exit 1; }
     else
         cp -vf "${KERNEL_DIR}/arch/riscv/boot/dts/sophgo/${CHIP}"-*.dtb "${OUT}/" || { echo "Error: Failed to copy ${CHIP} DTB files."; exit 1; }
     fi
-    echo "--- Kernel build complete ---"
+    echo "--- Kernel build complete (Mode: ${FIRMWARE}) ---"
 }
 
 # Function to build u-root initrd
 uroot_build() {
-    check_go_version # Ensure Go version is compatible
-    echo "--- Building u-root initrd ---"
-    mkdir -p "${OUT}" || { echo "Error: Failed to create output directory ${OUT}."; exit 1; }
-    echo "  Building u-root in ${UROOT_DIR}..."
-    (cd "${UROOT_DIR}" && go build) || { echo "Error: u-root go build failed."; exit 1; }
-    echo "  Creating initrd.img..."
-    GOOS=linux GOARCH=riscv64 "${UROOT_DIR}/u-root" -uroot-source "${UROOT_DIR}" -build bb \
-        -uinitcmd="boot" -o "${OUT}/initrd.img" \
-        core boot || { echo "Error: u-root initrd creation failed."; exit 1; }
-    echo "--- u-root initrd build complete ---"
+    echo "--- Building u-root initrd (Mode: ${FIRMWARE}) ---"
+    if [ "${FIRMWARE}" = "linuxboot" ]; then
+        check_go_version # Ensure Go version is compatible
+        mkdir -p "${OUT}" || { echo "Error: Failed to create output directory ${OUT}."; exit 1; }
+        echo "  Building u-root in ${UROOT_DIR}..."
+        (cd "${UROOT_DIR}" && go build) || { echo "Error: u-root go build failed."; exit 1; }
+        echo "  Creating initrd.img..."
+        GOOS=linux GOARCH=riscv64 "${UROOT_DIR}/u-root" -uroot-source "${UROOT_DIR}" -build bb \
+            -uinitcmd="boot" -o "${OUT}/initrd.img" \
+            core boot || { echo "Error: u-root initrd creation failed."; exit 1; }
+        echo "--- u-root initrd build complete ---"
+    elif [ "${FIRMWARE}" = "edk2" ]; then
+        echo "  [EDK2 Mode] Skipping u-root initrd build as it is not required."
+    fi
 }
 
 # Function to copy firmware-specific files (fip.bin or fsbl.bin)
@@ -187,7 +214,7 @@ pack_tool_build() {
 
 # Function to ensure all build prerequisites are met
 build_prerequisites() {
-    echo "--- Running all build prerequisites ---"
+    echo "--- Running all build prerequisites (Mode: ${FIRMWARE}) ---"
     zsbl_build
     opensbi_build
     kernel_build
@@ -200,10 +227,19 @@ build_prerequisites() {
     mkdir -p "${OUT}/FIRM_OUT/riscv64" || { echo "Error: Failed to create FIRM_OUT directory."; exit 1; }
     echo "  Copying DTB files to ${OUT}/FIRM_OUT/riscv64/..."
     cp -vf "${OUT}"/*.dtb "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy DTB files to FIRM_OUT."; exit 1; }
-    echo "  Copying Kernel Image to ${OUT}/FIRM_OUT/riscv64/..."
-    cp -vf "${OUT}/riscv64_Image" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy Kernel Image to FIRM_OUT."; exit 1; }
-    echo "  Copying initrd.img to ${OUT}/FIRM_OUT/riscv64/..."
-    cp -vf "${OUT}/initrd.img" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy initrd.img to FIRM_OUT."; exit 1; }
+
+    # Conditional staging based on FIRMWARE mode
+    if [ "${FIRMWARE}" = "linuxboot" ]; then
+        echo "  [LinuxBoot Mode] Staging kernel and initrd..."
+        echo "  Copying Kernel Image to ${OUT}/FIRM_OUT/riscv64/..."
+        cp -vf "${OUT}/riscv64_Image" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy Kernel Image to FIRM_OUT."; exit 1; }
+        echo "  Copying initrd.img to ${OUT}/FIRM_OUT/riscv64/..."
+        cp -vf "${OUT}/initrd.img" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy initrd.img to FIRM_OUT."; exit 1; }
+    elif [ "${FIRMWARE}" = "edk2" ]; then
+        echo "  [EDK2 Mode] Skipping Kernel Image and initrd staging."
+        # TODO: Add EDK2 specific binary staging here (e.g., RISCV_EFI.fd) if needed in the future
+        echo "  TODO: Implement staging for EDK2 specific payloads if required."
+    fi
     echo "  Copying fw_dynamic.bin to ${OUT}/FIRM_OUT/riscv64/..."
     cp -vf "${OUT}/fw_dynamic.bin" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy fw_dynamic.bin to FIRM_OUT."; exit 1; }
 
@@ -224,7 +260,7 @@ build_prerequisites() {
 # Function to package firmware.bin
 firmware_bin() {
     build_prerequisites # Ensure all components are built and staged
-    echo "--- Packaging firmware.bin for ${CHIP} chip ---"
+    echo "--- Packaging firmware.bin for ${CHIP} chip (Mode: ${FIRMWARE}) ---"
 
     local DTBS_LOCAL=$(find "${OUT}" -maxdepth 1 -name "*.dtb")
     if [ -z "$DTBS_LOCAL" ]; then
@@ -236,16 +272,27 @@ firmware_bin() {
         "${PACK_SRC_DIR}/pack" -a -p fip.bin -t 0x600000 -f "${OUT}/fip.bin" -o 0x30000 firmware.bin || { echo "Error: pack fip.bin failed."; exit 1; }
         "${PACK_SRC_DIR}/pack" -a -p zsbl.bin -t 0x600000 -f "${OUT}/zsbl.bin" -l 0x40000000 firmware.bin || { echo "Error: pack zsbl.bin failed."; exit 1; }
         "${PACK_SRC_DIR}/pack" -a -p fw_dynamic.bin -t 0x600000 -f "${OUT}/fw_dynamic.bin" -l 0x0 firmware.bin || { echo "Error: pack fw_dynamic.bin failed."; exit 1; }
-        "${PACK_SRC_DIR}/pack" -a -p riscv64_Image -t 0x600000 -f "${OUT}/riscv64_Image" -l 0x2000000 firmware.bin || { echo "Error: pack riscv64_Image failed."; exit 1; }
-        "${PACK_SRC_DIR}/pack" -a -p initrd.img -t 0x600000 -f "${OUT}/initrd.img" -l 0x30000000 firmware.bin || { echo "Error: pack initrd.img failed."; exit 1; }
+        # Conditionally pack kernel and initrd
+        if [ "${FIRMWARE}" = "linuxboot" ]; then
+            "${PACK_SRC_DIR}/pack" -a -p riscv64_Image -t 0x600000 -f "${OUT}/riscv64_Image" -l 0x2000000 firmware.bin || { echo "Error: pack riscv64_Image failed."; exit 1; }
+            "${PACK_SRC_DIR}/pack" -a -p initrd.img -t 0x600000 -f "${OUT}/initrd.img" -l 0x30000000 firmware.bin || { echo "Error: pack initrd.img failed."; exit 1; }
+        else
+            echo "  [EDK2 Mode] Skipping kernel and initrd packaging for sg2042."
+        fi
+
         for dtb_file in ${DTBS_LOCAL}; do
             echo "  Adding $(basename "$dtb_file") to firmware.bin..."
             "${PACK_SRC_DIR}/pack" -a -p "$(basename "$dtb_file")" -t 0x600000 -f "$dtb_file" -l 0x20000000 firmware.bin || { echo "Error: pack $dtb_file failed."; exit 1; }
         done
     elif [ "${CHIP}" = "sg2044" ]; then
         echo "  Processing sg2044 specific packaging steps..."
-        "${PACK_SRC_DIR}/pack" -a -p riscv64_Image -t 0x80000 -f "${OUT}/riscv64_Image" -l 0x80200000 -o 0x600000 firmware.bin || { echo "Error: pack riscv64_Image failed."; exit 1; }
-        "${PACK_SRC_DIR}/pack" -a -p initrd.img -t 0x80000 -f "${OUT}/initrd.img" -l 0x8b000000 firmware.bin || { echo "Error: pack initrd.img failed."; exit 1; }
+        # Conditionally pack kernel and initrd
+        if [ "${FIRMWARE}" = "linuxboot" ]; then
+            "${PACK_SRC_DIR}/pack" -a -p riscv64_Image -t 0x80000 -f "${OUT}/riscv64_Image" -l 0x80200000 -o 0x600000 firmware.bin || { echo "Error: pack riscv64_Image failed."; exit 1; }
+            "${PACK_SRC_DIR}/pack" -a -p initrd.img -t 0x80000 -f "${OUT}/initrd.img" -l 0x8b000000 firmware.bin || { echo "Error: pack initrd.img failed."; exit 1; }
+        else
+            echo "  [EDK2 Mode] Skipping kernel and initrd packaging for sg2044."
+        fi
         "${PACK_SRC_DIR}/pack" -a -p fsbl.bin -t 0x80000 -f "${OUT}/fsbl.bin" -l 0x7010080000 firmware.bin || { echo "Error: pack fsbl.bin failed."; exit 1; }
         "${PACK_SRC_DIR}/pack" -a -p zsbl.bin -t 0x80000 -f "${OUT}/zsbl.bin" -l 0x40000000 firmware.bin || { echo "Error: pack zsbl.bin failed."; exit 1; }
         "${PACK_SRC_DIR}/pack" -a -p fw_dynamic.bin -t 0x80000 -f "${OUT}/fw_dynamic.bin" -l 0x80000000 firmware.bin || { echo "Error: pack fw_dynamic.bin failed."; exit 1; }
