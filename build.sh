@@ -24,6 +24,23 @@ if [ "${FIRMWARE}" != "linuxboot" ] && [ "${FIRMWARE}" != "edk2" ]; then
     exit 1
 fi
 
+# Initialize PLAT as empty
+PLAT=""
+
+# Only assign PLAT logic if FIRMWARE is set to edk2
+if [ "${FIRMWARE}" = "edk2" ]; then
+    echo "--- Setting up EDK2 Platform Mapping ---"
+    if [ "${CHIP}" = "sg2042" ]; then
+        PLAT="SG2042-EVB"
+    elif [ "${CHIP}" = "sg2044" ]; then
+        PLAT="SD3-10"
+    else
+        echo "Error: Unsupported CHIP '${CHIP}' for EDK2 mode."
+        exit 1
+    fi
+    echo "  Mapped PLAT: ${PLAT}"
+fi
+
 # Toolchain and Kernel Settings
 CROSS_COMPILE=${CROSS_COMPILE:-riscv64-linux-gnu-} # Cross-compilation toolchain prefix
 ARCH=${ARCH:-riscv}                                # Architecture
@@ -43,6 +60,7 @@ KERNEL_DIR=kernel_${CHIP} # Kernel directory depends on CHIP
 UROOT_DIR=u-root
 PACK_SRC_DIR=pack
 CONFIGS_SRC_DIR=configs
+EDK2_DIR=sophgo_edk2
 
 # --- Output Image File Definitions ---
 IMAGE_FILE=${PWD}/firmware.img
@@ -212,6 +230,46 @@ pack_tool_build() {
     echo "--- Pack tool build complete ---"
 }
 
+# Function to build EDK2 firmware
+edk2_build() {
+    echo "--- Building EDK2 Firmware (Mode: ${FIRMWARE}) ---"
+
+    if [ "${FIRMWARE}" = "edk2" ]; then
+        if [ ! -d "${EDK2_DIR}" ]; then
+            echo "Error: EDK2 directory '${EDK2_DIR}' not found."
+            exit 1
+        fi
+
+        (
+            cd "${EDK2_DIR}" || exit 1
+            export WORKSPACE=$(pwd)
+            export GCC5_RISCV64_PREFIX=riscv64-unknown-elf-
+
+            if [ "${CHIP}" = "sg2042" ]; then
+                echo "  Configuring and Building for SG2042..."
+                export PACKAGES_PATH=$WORKSPACE/edk2:$WORKSPACE/edk2-platforms:$WORKSPACE/edk2-non-osi
+		source edk2/edksetup.sh || { echo "Error: edksetup.sh failed."; exit 1; }
+		make -C edk2/BaseTools || { echo "Error: BaseTools build failed."; exit 1; }
+                build -a RISCV64 -t GCC5 -b RELEASE -D ACPI_ENABLE=false \
+                      -p Platform/Sophgo/SG2042Pkg/${PLAT}/${PLAT}.dsc || { echo "Error: SG2042 build failed."; exit 1; }
+                cp -v "$WORKSPACE/Build/${PLAT}/RELEASE_GCC5/FV/${PLAT^^}.fd" "${OUT}/SG2042.fd" || { echo "Error: Failed to copy SG2042.fd."; exit 1; }
+            elif [ "${CHIP}" = "sg2044" ]; then
+                echo "  Configuring and Building for SG2044..."
+                export PACKAGES_PATH=$WORKSPACE/edk2:$WORKSPACE/edk2-platforms:$WORKSPACE/edk2-non-osi:$WORKSPACE/external-modules
+                source edk2/edksetup.sh || { echo "Error: edksetup.sh failed."; exit 1; }
+                make -C edk2/BaseTools || { echo "Error: BaseTools build failed."; exit 1; }
+                build -a RISCV64 -t GCC5 -b RELEASE \
+                      -p Platform/Sophgo/SG2044Pkg/${PLAT}/${PLAT}.dsc || { echo "Error: SG2044 build failed."; exit 1; }
+                cp -v "$WORKSPACE/Build/${PLAT}/RELEASE_GCC5/FV/${PLAT^^}.fd" "${OUT}/SG2044.fd" || { echo "Error: Failed to copy SG2044.fd."; exit 1; }
+            fi
+        ) || exit 1
+        echo "--- EDK2 build complete ---"
+
+    elif [ "${FIRMWARE}" = "linuxboot" ]; then
+        echo "  [LinuxBoot Mode] Skipping EDK2 build."
+    fi
+}
+
 # Function to ensure all build prerequisites are met
 build_prerequisites() {
     echo "--- Running all build prerequisites (Mode: ${FIRMWARE}) ---"
@@ -221,6 +279,7 @@ build_prerequisites() {
     uroot_build
     copy_firmware_files
     pack_tool_build
+    edk2_build
     echo "--- All individual components built ---"
 
     echo "--- Preparing FIRM_OUT directory for image creation ---"
@@ -237,8 +296,14 @@ build_prerequisites() {
         cp -vf "${OUT}/initrd.img" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy initrd.img to FIRM_OUT."; exit 1; }
     elif [ "${FIRMWARE}" = "edk2" ]; then
         echo "  [EDK2 Mode] Skipping Kernel Image and initrd staging."
-        # TODO: Add EDK2 specific binary staging here (e.g., RISCV_EFI.fd) if needed in the future
-        echo "  TODO: Implement staging for EDK2 specific payloads if required."
+        local edk2_filename=""
+        if [ "${CHIP}" = "sg2042" ]; then
+            edk2_filename="SG2042"
+        elif [ "${CHIP}" = "sg2044" ]; then
+            edk2_filename="SG2044"
+        fi
+        echo "  Copying ${edk2_filename}.fd to ${OUT}/FIRM_OUT/riscv64/..."
+        cp -vf "${OUT}/${edk2_filename}.fd" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy ${edk2_filename}.fd to FIRM_OUT."; exit 1; }
     fi
     echo "  Copying fw_dynamic.bin to ${OUT}/FIRM_OUT/riscv64/..."
     cp -vf "${OUT}/fw_dynamic.bin" "${OUT}/FIRM_OUT/riscv64/" || { echo "Error: Failed to copy fw_dynamic.bin to FIRM_OUT."; exit 1; }
@@ -277,7 +342,7 @@ firmware_bin() {
             "${PACK_SRC_DIR}/pack" -a -p riscv64_Image -t 0x600000 -f "${OUT}/riscv64_Image" -l 0x2000000 firmware.bin || { echo "Error: pack riscv64_Image failed."; exit 1; }
             "${PACK_SRC_DIR}/pack" -a -p initrd.img -t 0x600000 -f "${OUT}/initrd.img" -l 0x30000000 firmware.bin || { echo "Error: pack initrd.img failed."; exit 1; }
         else
-            echo "  [EDK2 Mode] Skipping kernel and initrd packaging for sg2042."
+            "${PACK_SRC_DIR}/pack" -a -p SG2042.fd -t 0x600000 -f "${OUT}/SG2042.fd" -l 0x2000000 -o 0x2040000 firmware.bin || { echo "Error: pack SG2042.fd failed."; exit 1; }
         fi
 
         for dtb_file in ${DTBS_LOCAL}; do
@@ -291,7 +356,7 @@ firmware_bin() {
             "${PACK_SRC_DIR}/pack" -a -p riscv64_Image -t 0x80000 -f "${OUT}/riscv64_Image" -l 0x80200000 -o 0x600000 firmware.bin || { echo "Error: pack riscv64_Image failed."; exit 1; }
             "${PACK_SRC_DIR}/pack" -a -p initrd.img -t 0x80000 -f "${OUT}/initrd.img" -l 0x8b000000 firmware.bin || { echo "Error: pack initrd.img failed."; exit 1; }
         else
-            echo "  [EDK2 Mode] Skipping kernel and initrd packaging for sg2044."
+            "${PACK_SRC_DIR}/pack" -a -p SG2044.fd -t 0x80000 -f "${OUT}/SG2044.fd" -l 0x80200000 -o 0x600000 firmware.bin || { echo "Error: pack SG2044.fd failed."; exit 1; }
         fi
         "${PACK_SRC_DIR}/pack" -a -p fsbl.bin -t 0x80000 -f "${OUT}/fsbl.bin" -l 0x7010080000 firmware.bin || { echo "Error: pack fsbl.bin failed."; exit 1; }
         "${PACK_SRC_DIR}/pack" -a -p zsbl.bin -t 0x80000 -f "${OUT}/zsbl.bin" -l 0x40000000 firmware.bin || { echo "Error: pack zsbl.bin failed."; exit 1; }
@@ -385,6 +450,9 @@ case "$1" in
         ;;
     copy_firmware_files)
         copy_firmware_files
+        ;;
+    edk2_build)
+        edk2_build
         ;;
     build_prerequisites)
         build_prerequisites
