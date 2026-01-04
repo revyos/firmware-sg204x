@@ -20,24 +20,63 @@ jobs:
             LINUX_REPO: revyos/linux
             OPENSBI_BRANCH: sg204x-v1.8
             OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: linuxboot
+            EDK2_BRANCH: upstream/dt/sg2042
+            EDK2_REPO: revyos/sophgo-edk2
+          - CHIP: sg2042
+            M_CHIP_NUM: single
+            LINUX_BRANCH: revyos/6.18.y
+            LINUX_REPO: revyos/linux
+            OPENSBI_BRANCH: sg204x-v1.8
+            OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: edk2
+            EDK2_BRANCH: upstream/dt/sg2042
+            EDK2_REPO: revyos/sophgo-edk2
           - CHIP: sg2042
             M_CHIP_NUM: pisces
             LINUX_BRANCH: sg2042-vendor-v6.6.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
             OPENSBI_BRANCH: sg2042-v1.2
             OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: linuxboot
+            EDK2_BRANCH: upstream/dt/sg2042
+            EDK2_REPO: revyos/sophgo-edk2
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: revyos/6.18.y
             LINUX_REPO: revyos/linux
             OPENSBI_BRANCH: sg204x-v1.8
             OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: linuxboot
+            EDK2_BRANCH: upstream/dt/sg2044
+            EDK2_REPO: revyos/sophgo-edk2
           - CHIP: sg2044
             M_CHIP_NUM: single
             LINUX_BRANCH: revyos/6.18.y
             LINUX_REPO: revyos/linux
             OPENSBI_BRANCH: sg2044-master-rva23
             OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: linuxboot
+            EDK2_BRANCH: upstream/dt/sg2044
+            EDK2_REPO: revyos/sophgo-edk2
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: revyos/6.18.y
+            LINUX_REPO: revyos/linux
+            OPENSBI_BRANCH: sg204x-v1.8
+            OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: edk2
+            EDK2_BRANCH: upstream/dt/sg2044
+            EDK2_REPO: revyos/sophgo-edk2
+          - CHIP: sg2044
+            M_CHIP_NUM: single
+            LINUX_BRANCH: revyos/6.18.y
+            LINUX_REPO: revyos/linux
+            OPENSBI_BRANCH: sg2044-master-rva23
+            OPENSBI_REPO: revyos/opensbi
+            FIRMWARE: edk2
+            EDK2_BRANCH: upstream/dt/sg2044
+            EDK2_REPO: revyos/sophgo-edk2
 
     env:
       MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.12.29
@@ -48,6 +87,8 @@ jobs:
       KBUILD_BUILD_HOST: riscv-builder
       KDEB_COMPRESS: xz
       TZ: Asia/Shanghai
+      CHIP: ${{ matrix.CHIP }}
+      FIRMWARE: ${{ matrix.FIRMWARE }}
       # CHIP and M_CHIP_NUM are already available via matrix.CHIP and matrix.M_CHIP_NUM,
       # no need to redefine them here in the global env block.
 
@@ -76,6 +117,7 @@ jobs:
           ref: ${{ matrix.LINUX_BRANCH }}
 
       - name: Setup Go
+        if: ${{ matrix.FIRMWARE == 'linuxboot' }}
         uses: actions/setup-go@v5
         with:
           go-version: '1.21.13' # As per the build.sh script's requirement (< 1.22)
@@ -83,6 +125,15 @@ jobs:
 
       - name: Show Go Version
         run: go version
+
+      - name: Checkout EDK2 Repo
+        if: ${{ matrix.FIRMWARE == 'edk2' }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ matrix.EDK2_REPO }}
+          path: sophgo_edk2
+          ref: ${{ matrix.EDK2_BRANCH }}
+          submodules: recursive
 
       - name: Cache RISC-V Toolchain
         id: cache-toolchain # Assign an ID to this step to check its output later
@@ -121,18 +172,17 @@ jobs:
         # The CROSS_COMPILE prefix must match the toolchain installed.
         run: |
           export PATH=${TOOLCHAIN_HOME}/bin:$PATH
-          export CHIP=${{ matrix.CHIP }}
           export CROSS_COMPILE=riscv64-unknown-linux-gnu- # This is the common prefix for the downloaded toolchain
           ./build.sh all # Calls the 'all' target in your build.sh script
           BRANCH=$(echo "${{ matrix.LINUX_BRANCH }}" | sed 's/\//_/g')
           echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
-          mv firmware.bin firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.bin
-          mv firmware.img firmware_${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.img
+          mv firmware.bin firmware_${{ matrix.FIRMWARE }}-${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.bin
+          mv firmware.img firmware_${{ matrix.FIRMWARE }}-${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.img
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.M_CHIP_NUM }}-${{ env.BRANCH }}-${{ matrix.OPENSBI_BRANCH }}
+          name: ${{ matrix.CHIP }}-bootloader-${{ matrix.FIRMWARE }}-${{ matrix.M_CHIP_NUM }}-${{ env.BRANCH }}-${{ matrix.OPENSBI_BRANCH }}
           path: |
             firmware_*.bin
             firmware_*.img
