@@ -102,7 +102,7 @@ jobs:
                              device-tree-compiler xz-utils qemu-system-riscv64 binfmt-support qemu-user-static \
                              curl automake autotools-dev python3 libmpc-dev libmpfr-dev \
                              libgmp-dev texinfo gperf libtool patchutils bc zlib1g-dev \
-                             libexpat-dev ninja-build uuid-dev gcc-riscv64-unknown-elf
+                             libexpat-dev ninja-build uuid-dev gcc-riscv64-unknown-elf acpica-tools
 
           update-binfmts --display
 
