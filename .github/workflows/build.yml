@@ -79,7 +79,7 @@ jobs:
             EDK2_REPO: revyos/sophgo-edk2
 
     env:
-      MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.12.29
+      MAINLINE_TOOLCHAIN_URL: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.01.23
       MAINLINE_TOOLCHAIN_FILENAME: riscv64-glibc-ubuntu-24.04-gcc.tar.xz
       TOOLCHAIN_HOME: /opt/riscv # Directory where the toolchain will be extracted
       ARCH: riscv
@@ -94,23 +94,23 @@ jobs:
 
     steps:
       - name: Checkout Main Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Checkout ZSBL
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: revyos/zsbl
           path: zsbl
 
       - name: Checkout OpenSBI
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: ${{ matrix.OPENSBI_REPO }}
           path: opensbi
           ref: ${{ matrix.OPENSBI_BRANCH }}
 
       - name: Checkout Linux Kernel
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: ${{ matrix.LINUX_REPO }}
           path: kernel_${{ matrix.CHIP }}
@@ -118,7 +118,7 @@ jobs:
 
       - name: Setup Go
         if: ${{ matrix.FIRMWARE == 'linuxboot' }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.21.13' # As per the build.sh script's requirement (< 1.22)
           cache: true # Cache Go modules for faster u-root builds
@@ -137,7 +137,7 @@ jobs:
 
       - name: Cache RISC-V Toolchain
         id: cache-toolchain # Assign an ID to this step to check its output later
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.TOOLCHAIN_HOME }}
           key: ${{ runner.os }}-riscv-toolchain-${{ env.MAINLINE_TOOLCHAIN_FILENAME }}-${{ hashFiles(env.MAINLINE_TOOLCHAIN_FILENAME) }}
@@ -180,7 +180,7 @@ jobs:
           mv firmware.img firmware_${{ matrix.FIRMWARE }}-${{ matrix.CHIP }}-${{ matrix.M_CHIP_NUM }}-${BRANCH}-${{ matrix.OPENSBI_BRANCH }}.img
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.CHIP }}-bootloader-${{ matrix.FIRMWARE }}-${{ matrix.M_CHIP_NUM }}-${{ env.BRANCH }}-${{ matrix.OPENSBI_BRANCH }}
           path: |
