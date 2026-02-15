@@ -36,7 +36,7 @@ jobs:
             M_CHIP_NUM: pisces
             LINUX_BRANCH: sg2042-vendor-v6.6.y
             LINUX_REPO: revyos/sg2042-vendor-kernel
-            OPENSBI_BRANCH: sg2042-v1.2
+            OPENSBI_BRANCH: sg2042-v1.8.1
             OPENSBI_REPO: revyos/opensbi
             FIRMWARE: linuxboot
             EDK2_BRANCH: upstream/dt/sg2042
